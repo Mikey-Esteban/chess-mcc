@@ -59,7 +59,8 @@ public class Game {
         playMove(squares, piece);
 
         // isChecked logic
-        boolean stillInCheck = MoveConverter.isKingInCheck(game.getOpponent().getColor(), game.board, null);
+        // boolean stillInCheck = MoveConverter.isKingInCheck(game.getOpponent().getColor(), game.board, null);
+        boolean stillInCheck = KingCheckValidator.isKingInCheck(game.getOpponent().getColor(), game.board, null);
         if (stillInCheck) {
           resetMove(squares, piece);
           continue;
