@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,28 +19,23 @@ public class MoveConverter {
     result.put('h', 7);
     return Collections.unmodifiableMap(result);
   }
-  private static Square findRookSquare(Square endSquare, String pieceLabel, String currentPlayer, Board board) {
-    // Square rookSquare = traverse(endSquare, "vertical", pieceLabel, currentPlayer, board);
-    Square rookSquare = MoveUtils.traverse(endSquare, "vertical", pieceLabel, currentPlayer, board);
-    if (rookSquare == null) {
-      // rookSquare = traverse(endSquare, "horizontal", pieceLabel, currentPlayer, board);
-      rookSquare = MoveUtils.traverse(endSquare, "horizontal", pieceLabel, currentPlayer, board);
+  private static ArrayList<Square> findRookSquare(Square endSquare, String pieceLabel, String currentPlayer, Board board, int startColumn, int startRow) {
+    ArrayList<Square> rookSquares = MoveUtils.traverse(endSquare, "vertical", pieceLabel, currentPlayer, board, startColumn, startRow);
+    if (rookSquares.size() == 0) {
+      rookSquares = MoveUtils.traverse(endSquare, "horizontal", pieceLabel, currentPlayer, board, startColumn, startRow);
     }
-    return rookSquare;
+    return rookSquares;
   }
 
-  private static Square findQueenSquare(Square endSquare, String pieceLabel, String currentPlayer, Board board) {
-    // Square queenSquare = traverse(endSquare, "diagonal", pieceLabel, currentPlayer, board);
-    Square queenSquare = MoveUtils.traverse(endSquare, "diagonal", pieceLabel, currentPlayer, board);
-    if (queenSquare == null) {
-      // queenSquare = traverse(endSquare, "vertical", pieceLabel, currentPlayer, board);
-      queenSquare = MoveUtils.traverse(endSquare, "vertical", pieceLabel, currentPlayer, board);
+  private static ArrayList<Square> findQueenSquare(Square endSquare, String pieceLabel, String currentPlayer, Board board, int startColumn, int startRow) {
+    ArrayList<Square> queenSquares = MoveUtils.traverse(endSquare, "diagonal", pieceLabel, currentPlayer, board, startColumn, startRow);
+    if (queenSquares.size() == 0) {
+      queenSquares = MoveUtils.traverse(endSquare, "vertical", pieceLabel, currentPlayer, board, startColumn, startRow);
     }
-    if (queenSquare == null) {
-      // queenSquare = traverse(endSquare, "horizontal", pieceLabel, currentPlayer, board);
-      queenSquare = MoveUtils.traverse(endSquare, "horizontal", pieceLabel, currentPlayer, board);
+    if (queenSquares.size() == 0) {
+      queenSquares = MoveUtils.traverse(endSquare, "horizontal", pieceLabel, currentPlayer, board, startColumn, startRow);
     }
-    return queenSquare;
+    return queenSquares;
   }
 
   private static boolean isLandingOnOwnPiece(Square endSquare, String currentPlayer) {
@@ -61,14 +57,36 @@ public class MoveConverter {
     }
   }
 
+  private static Square playPawnMove(String notation, Square endSquare, String currentPlayer, Board board) {
+    return notation.length() > 2 ? 
+      MoveUtils.checkPawnMove(endSquare, currentPlayer, board, RANK_FILE_MAP.get(notation.charAt(0))) :
+      MoveUtils.checkPawnMove(endSquare, currentPlayer, board, -1) ;
+  }
+
+  private static Square getStartSquare(ArrayList<Square> foundSquares) {
+    if (foundSquares.size() == 1) {
+      return foundSquares.get(0);
+    }
+
+    if (foundSquares.size() > 1) {
+      MoveUtils.duplicatesMessage();
+    } 
+
+    return null;
+  }
+
   public static Square[] algebraicToSquares(String notation, String currentPlayer, Board board) {
     if (isCastling(notation)) {
       return checkCastling(notation, currentPlayer, board);
     }
+
+    // TODO: length 3, figure out off its normal minor piece or specified pawn capture
+    String firstLetter = notation.substring(0, 1);
+    boolean isPawnMove = MoveUtils.isPawnMove(notation.substring(0, 1));
+    String pieceLabel = isPawnMove ? MoveUtils.getPawnLabel() : firstLetter ;
+
     int column = RANK_FILE_MAP.get(notation.charAt(notation.length()- 2));
     int row = Character.getNumericValue(notation.charAt(notation.length() - 1)) - 1;
-    // String pieceLabel = notation.length() == 2 ? getPawnLabel() : notation.substring(0, 1) ;
-    String pieceLabel = notation.length() == 2 ? MoveUtils.getPawnLabel() : notation.substring(0, 1) ;
     Square endSquare = board.getSquare(row, column);
     
     Square[] squares = new Square[2];
@@ -80,11 +98,29 @@ public class MoveConverter {
       return squares;
     }
 
-    if (notation.length() == 2) {
-      squares[0] = MoveUtils.checkPawnMove(endSquare, currentPlayer, board);
-      // squares[0] = checkPawnMove(endSquare, currentPlayer, board);
-    } else {
-      squares[0] = findPieceSquare(pieceLabel, endSquare, currentPlayer, board);
+    if (isPawnMove) {
+      squares[0] = playPawnMove(notation, endSquare, currentPlayer, board);
+      return squares;
+    } 
+
+    if (notation.length() == 3) {
+      ArrayList<Square> foundSquares = findPieceSquare(pieceLabel, endSquare, currentPlayer, board, -1, -1);
+      squares[0] = getStartSquare(foundSquares);
+
+      return squares;
+    } 
+
+    try {
+      int startColumn = RANK_FILE_MAP.get(notation.charAt(1));
+      int startRow = notation.length() == 5 ? 
+        Character.getNumericValue(notation.charAt(2)) - 1 :
+        -1 ;
+      ArrayList<Square> foundSquares = findPieceSquare(pieceLabel, endSquare, currentPlayer, board, startColumn, startRow);
+      squares[0] = getStartSquare(foundSquares);
+    } catch (Exception e) {
+      int startRow = Character.getNumericValue(notation.charAt(1)) - 1;
+      ArrayList<Square> foundSquares = findPieceSquare(pieceLabel, endSquare, currentPlayer, board, -1, startRow);
+      squares[0] = getStartSquare(foundSquares);
     }
 
     return squares;
@@ -97,7 +133,7 @@ public class MoveConverter {
     Square nextSquare = board.getSquare(kingSquare.getRow(), kingSquare.getColumn() + (direction * counter));
 
     while (nextSquare.getColumn() != rookSquare.getColumn()) {
-      System.out.println(nextSquare);
+
       if (nextSquare.getPiece() != null) {
         return false;
       }
@@ -117,7 +153,8 @@ public class MoveConverter {
 
   private static boolean passesCastlingRules(Square kingSquare, Square rookSquare, String castlingType, String color, Board board) {  
     return 
-      canKingTravelUnchecked(kingSquare, rookSquare, castlingType, color, board)
+      KingCheckValidator.isKingInCheck(color, board, kingSquare) == false
+      && canKingTravelUnchecked(kingSquare, rookSquare, castlingType, color, board)
       && kingSquare != null && rookSquare != null
       && kingSquare.getPiece().getHasMoved() == false
       && rookSquare.getPiece().getHasMoved() == false
@@ -152,13 +189,11 @@ public class MoveConverter {
     rookSquare.setPiece(null);
     kingSquare.setPiece(null);
 
-    System.out.println("end of play castle");
-
     return new Square[]{kingSquare, kingSquare};
   }
 
   private static boolean canCastle(String castlingType, String color, Board board) {
-    System.out.println("calling canCastle");
+
     int[] kingHomeSquare = King.getHomeSquare(color);
     int[] rookHomeSquare = Rook.getCastlingSquare(castlingType, color);
     Square kingSquare = board.getSquare(kingHomeSquare[0], kingHomeSquare[1]);
@@ -167,370 +202,36 @@ public class MoveConverter {
     return passesCastlingRules(kingSquare, rookSquare, castlingType, color, board);
   }
 
-  private static Square findPieceSquare(String pieceLabel, Square endSquare, String currentPlayer, Board board) {
-    // if (pieceLabel.equals(getBishopLabel())) {
+  public static ArrayList<Square> findPieceSquare(String pieceLabel, Square endSquare, String currentPlayer, Board board, int startColumn, int startRow) {
+ 
     if (pieceLabel.equals(MoveUtils.getBishopLabel())) {
-      // return traverse(endSquare, "diagonal", pieceLabel, currentPlayer, board);
-      return MoveUtils.traverse(endSquare, "diagonal", pieceLabel, currentPlayer, board);
+      return MoveUtils.traverse(endSquare, "diagonal", pieceLabel, currentPlayer, board, startColumn, startRow);
     }
-    // if (pieceLabel.equals(getKnightLabel())) {
+
     if (pieceLabel.equals(MoveUtils.getKnightLabel())) {
-      return findKnightSquare(endSquare, pieceLabel, currentPlayer, board);
+      return findKnightSquare(endSquare, pieceLabel, currentPlayer, board, startColumn, startRow);
     }
-    // if (pieceLabel.equals(getRookLabel())) {
+
     if (pieceLabel.equals(MoveUtils.getRookLabel())) {
-      return findRookSquare(endSquare, pieceLabel, currentPlayer, board);
+      return findRookSquare(endSquare, pieceLabel, currentPlayer, board, startColumn, startRow);
     }
-    // if (pieceLabel.equals(getQueenLabel())) {
+
     if (pieceLabel.equals(MoveUtils.getQueenLabel())) {
-      return findQueenSquare(endSquare, pieceLabel, currentPlayer, board);
+      return findQueenSquare(endSquare, pieceLabel, currentPlayer, board, startColumn, startRow);
+    }
+
+    if (pieceLabel.equals(MoveUtils.getKingLabel())) {
+      ArrayList<Square> kingSquares = new ArrayList<>();
+      Square kingSquare = MoveUtils.handleKingMove(endSquare, currentPlayer, board);
+      kingSquares.add(kingSquare);
+      return kingSquares;
     }
 
     return null;
   }
 
-  private static Square findKnightSquare(Square endSquare, String pieceLabel, String currentPlayer, Board board) {
-    // return traverse(endSquare, "L", pieceLabel, currentPlayer, board);
-    return MoveUtils.traverse(endSquare, "L", pieceLabel, currentPlayer, board);
+  private static ArrayList<Square> findKnightSquare(Square endSquare, String pieceLabel, String currentPlayer, Board board, int startColumn, int startRow) {
+    return MoveUtils.traverse(endSquare, "L", pieceLabel, currentPlayer, board, startColumn, startRow);
   }
-
-
-
-    // private static int[][] getDiagonalDirections() {
-  //   return new int[][]{
-  //     {-1, -1}, // leftDown
-  //     {-1, 1}, // leftUp
-  //     {1, -1}, // rightDown
-  //     {1, 1} // rightUp
-  //   };
-  // }
-
-  // private static int[][] getKnightDirections() {
-  //   return new int[][] {
-  //     {-2, -1},
-  //     {-2, 1},
-  //     {-1, -2},
-  //     {-1, 2},
-  //     {1, -2},
-  //     {1, 2},
-  //     {2, -1},
-  //     {2, 1}
-  //   };
-  // }
-
-  // private static int[][] getHorizontalDirections() {
-  //   return new int[][]{
-  //     {0, -1},  // left
-  //     {0, 1}  // right
-  //   };
-  // }
-
-  // private static int[][] getVerticalDirections() {
-  //   return new int[][]{
-  //     {-1, 0},  // down
-  //     {1, 0}  // up
-  //   };
-  // }
-
-  // private static String getPawnLabel() {
-  //   return PieceType.PAWN.getLabel();
-  // }
-
-  // private static String getBishopLabel() {
-  //   return PieceType.BISHOP.getLabel();
-  // }
-
-  // private static String getKnightLabel() {
-  //   return PieceType.KNIGHT.getLabel();
-  // }
-
-  // private static String getRookLabel() {
-  //   return PieceType.ROOK.getLabel();
-  // }
-
-  // private static String getQueenLabel() {
-  //   return PieceType.QUEEN.getLabel();
-  // }
-
-  // private static String getKingLabel() {
-  //   return PieceType.KING.getLabel();
-  // }
-
-
-
-  // private static boolean canRookAttackKing(Square kingSquare, String pieceLabel, String color, Board board) {
-  //   return findRookSquare(kingSquare, pieceLabel, color, board) != null;
-  // }
-
-  // private static boolean canQueenAttackKing(Square kingSquare, String pieceLabel, String color, Board board) {
-  //   return findQueenSquare(kingSquare, pieceLabel, color, board) != null;
-  // }
-
-  // private static boolean isWithinBoard(Square square) {
-  //   return square != null && square.getRow() >= 0 && square.getRow() <= 7 && square.getColumn() >= 0 && square.getColumn() <= 7;
-  // }
-
-  // private static boolean isTargetPiece(Square square, String label, String color) {
-  //   return square.getPiece() != null && (square.getPiece().getLabel().equals(label) && 
-  //                                         square.getPiece().getColor().equals(color));
-  // }
-
-  // private static boolean isPieceBlocking(Square square) {
-  //   // return square.getPiece() != null && !square.getPiece().getLabel().equals(label);
-  //   return square.getPiece() != null;
-  // }
-
-  // private static boolean isPawn(Piece piece) {
-  //   return piece != null && piece.getLabel().equals("P");
-  // }
-
-  // private static int getNextRow(Square endSquare, String color) {
-  //   return color == "white" ? endSquare.getRow() - 1 : endSquare.getRow() + 1 ;
-  // }
-
-  // private static Square findKing(String color, Board board) {
-  //   for (int row = 0; row < 8; row++) {
-  //     for (int col = 0; col < 8; col++) {
-  //       Square currentSquare = board.getSquare(row, col);
-  //       Piece piece = currentSquare.getPiece();
-
-  //       if (piece != null && piece.getLabel().equals(getKingLabel()) && piece.getColor().equals(color)) {
-  //         return currentSquare;
-  //       }
-  //     }
-  //   }
-
-  //   return null;
-  // }
-
-  // private static int[][] getDirectionsFromOrientation(String orientation) {
-  //   if (orientation.equals("diagonal")) {
-  //     return getDiagonalDirections();
-  //   }
-
-  //   if (orientation.equals("L")) {
-  //     return getKnightDirections();
-  //   }
-
-  //   return orientation == "horizontal" ? getHorizontalDirections() : getVerticalDirections() ;
-  // }
-  
-  
-
-  // private static boolean canPieceAttackKing(Square pieceSquare, Square kingSquare, String color, Board board) {
-  //   String pieceLabel = pieceSquare.getPiece().getLabel();
-
-  //   if (pieceLabel.equals(getPawnLabel())) {
-  //     return checkPawnMove(kingSquare, color, board) != null;
-  //   }
-  //   if (pieceLabel.equals(getKnightLabel())) {
-  //     return traverse(kingSquare, "L", pieceLabel, color, board) != null;
-  //   }
-  //   if (pieceLabel.equals(getBishopLabel())) {
-  //     return traverse(kingSquare, "diagonal", pieceLabel, color, board) != null;
-  //   }
-  //   if (pieceLabel.equals(getRookLabel())) {
-  //     return canRookAttackKing(kingSquare, pieceLabel, color, board);
-  //   }
-  //   if (pieceLabel.equals(getQueenLabel())) {
-  //     return canQueenAttackKing(kingSquare, pieceLabel, color, board);
-  //   }
-
-  //   return false;
-  // }
-
-  // public static boolean isKingInCheck(String color, Board board, Square castlingSquare) {
-  //   System.out.println("isKingInCheck called");
-  //   String opponentColor = color == "white" ? "black" : "white";
-  //   Square opponentKing = findKing(opponentColor, board);
-
-  //   if (opponentKing == null) {
-  //     throw new IllegalStateException("King not found on the board");
-  //   }
-
-  //   System.out.println("going to see if " + opponentColor + " can check my king... " + color);
-
-  //   for (int row = 0; row < 8; row++) {
-  //     for (int col = 0; col < 8; col++) {
-  //       Square currentSquare = board.getSquare(row, col);
-  //       boolean isChecked;
-  //       if (currentSquare.getPiece() != null && currentSquare.getPiece().getColor().equals(color)) {
-  //         if (castlingSquare == null) {
-  //           isChecked = canPieceAttackKing(currentSquare, opponentKing, color, board);
-  //         } else {
-  //           isChecked = canPieceAttackKing(currentSquare, castlingSquare, opponentColor, board);
-  //         }
-
-  //         if (isChecked) return true;
-  //       }
-
-  //     }
-  //   }
-
-  //   return false;
-  // }
-
-  // private static Square traverse(Square endSquare, String orientation, String label, String color, Board board) {
-  //   int[][] directions = getDirectionsFromOrientation(orientation);
-    
-  //   for (int[] direction : directions) {
-  //     Square foundSquare = traverseInDirection(endSquare, direction, orientation, label, color, board);
-  //     if (foundSquare != null) {
-  //       return foundSquare;
-  //     }
-  //   }
-
-  //   return null;
-  // }
-
-  // private static Square handleLinearDirection(Square startSquare, int[] direction, String dir, String label, String color, Board board) {
-  //   int counter = 1;
-  //   Square nextSquare = getNextSquare(startSquare, direction, dir, counter, board);
-
-  //   while (isWithinBoard(nextSquare)) {
-  
-  //     if (isTargetPiece(nextSquare,label, color)) {
-  //       board.resetEnPassant();
-  //       return nextSquare;
-  //     } 
-
-  //     // cant move past a piece
-  //     if (isPieceBlocking(nextSquare)) {
-  //       return null;
-  //     }
-      
-  //     counter++;
-  //     nextSquare = getNextSquare(startSquare, direction, dir, counter, board);
-  //   }
-
-  //   return null;
-  // }
-
-  // private static Square handleNonLinearDirection(Square startSquare, int[] direction, String dir, String label, String color, Board board) {
-  //   Square nextSquare = getNextSquare(startSquare, direction, dir, 1, board);
-  //   if (isWithinBoard(nextSquare) && isTargetPiece(nextSquare,label, color)) {
-  //     board.resetEnPassant();
-  //     return nextSquare;
-  //   }
-      
-  //   return null;
-  // }
-
-  // private static Square traverseInDirection(Square startSquare, int[] direction, String dir, String label, String color, Board board) {
-  //   return dir.equals("L") ?
-  //     handleNonLinearDirection(startSquare, direction, dir, label, color, board) :
-  //     handleLinearDirection(startSquare, direction, dir, label, color, board) ;
-  // }
-
-  // private static Square checkPawnMove(Square endSquare, String color, Board board) {
-
-  //   int nextRow = getNextRow(endSquare, color);
-    
-  //   // check 1 jump, then check 2 jump
-  //   if (endSquare.getPiece() == null) {
-
-  //     if (board.getEnPassantSquare() != null && endSquare == board.getEnPassantSquare()) {
-  //       return handleEnPassantCapture(board, nextRow);
-  //     }
-
-  //     return handleNormalMove(endSquare, color, board, nextRow);
-  //   } 
-  //   // capture
-  //   return handleCapture(endSquare, color, board, nextRow);
-  // }
-
-  // private static Square handleNormalMove(Square endSquare, String color, Board board, int nextRow) {
-
-  //   String pawnLabel = getPawnLabel();
-  //   Square nextSquare = board.getSquare(nextRow, endSquare.getColumn());
-  //   // 1 move
-  //   if (isTargetPiece(nextSquare, pawnLabel, color)) {
-  //     Pawn pawn = (Pawn) nextSquare.getPiece();
-  //     pawn.setHasMoved();
-  //     board.resetEnPassant();
-
-  //     return nextSquare;
-  //   }
-
-  //   // 2 jump
-  //   int next2Rows = color == "white" ?
-  //     endSquare.getRow() - 2 : 
-  //     endSquare.getRow() + 2 ;
-
-  //   Square next2Square = board.getSquare(next2Rows, endSquare.getColumn());
-
-  //   if (isTargetPiece(next2Square, pawnLabel, color)) {
-  //       Pawn pawn = (Pawn) next2Square.getPiece();
-  //       pawn.setHasMoved();
-  //       board.setEnPassantSquare(nextSquare);
-  //       board.setEnPassantPawn(endSquare);
-        
-  //       return next2Square;
-  //   } 
-
-  //   return null;
-  // }
-
-  // private static Square handleCapture(Square endSquare, String color, Board board, int nextRow) {
-
-  //   String pawnLabel = getPawnLabel();
-  //   int leftColumn = endSquare.getColumn() - 1;
-  //   int rightColumn = endSquare.getColumn() + 1;
-  //   Square leftSquare = board.getSquare(nextRow, leftColumn);
-  //   Square rightSquare = board.getSquare(nextRow, rightColumn);
-
-  //   if (leftSquare != null && isTargetPiece(leftSquare, pawnLabel, color)) {
-  //     return capturePawn(board, leftSquare);
-  //   }
-
-  //   if (rightSquare != null && isTargetPiece(rightSquare, pawnLabel, color)) {
-  //     return capturePawn(board, rightSquare);
-  //   }
-
-  //   return null;
-  // }
-
-  // private static Square capturePawn(Board board, Square square) {
-  //   Pawn pawn = (Pawn) square.getPiece();
-  //   pawn.setHasMoved();
-  //   board.resetEnPassant();
-
-  //   return square;
-  // }
-
-  // private static Square handleEnPassantCapture(Board board, int nextRow) {
-  //   Square enPassantSquare = board.getEnPassantSquare();
-  //   Square leftSquare = board.getSquare(nextRow, enPassantSquare.getColumn() - 1);
-  //   Square rightSquare = board.getSquare(nextRow, enPassantSquare.getColumn() + 1);
-
-  //   Piece leftSquarePiece = leftSquare.getPiece();
-  //   Piece rightSquarePiece = rightSquare.getPiece();
-
-  //   if (isPawn(leftSquarePiece)) {
-  //     Square pawnSquare = board.getEnPassantPawn();
-  //     pawnSquare.setPiece(null);
-  //     return capturePawn(board, leftSquare);
-  //   }
-
-  //   if (isPawn(rightSquarePiece)) {
-  //     Square pawnSquare = board.getEnPassantPawn();
-  //     pawnSquare.setPiece(null);
-  //     return capturePawn(board, rightSquare);
-  //   }
-
-  //   return null;
-  // }
-
-  // private static Square getNextSquare(Square startSquare, int[] direction, String dir, int counter, Board board) {
-  //   if (dir.equals("L")) {
-  //     return board.getSquare(startSquare.getRow() + direction[0], startSquare.getColumn() + direction[1]);
-  //   } else if (dir.equals("diagonal")) {
-  //     return board.getSquare(startSquare.getRow() + (direction[0] * counter), startSquare.getColumn() + (direction[1] * counter));
-  //   } else if (dir.equals("vertical")) {
-  //     return board.getSquare(startSquare.getRow() + (direction[0] * counter), startSquare.getColumn());
-  //   } else {
-  //     return board.getSquare(startSquare.getRow(), startSquare.getColumn() + (direction[1] * counter));
-  //   }
-  // }
 
 }

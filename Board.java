@@ -1,3 +1,5 @@
+import java.util.ArrayList;
+
 public class Board {
   
   private Square[][] board;
@@ -8,6 +10,22 @@ public class Board {
     this.board = new Square[8][8];
 
     initializeBoard();
+  }
+
+  public ArrayList<Piece> getAllPieces(String color) {
+    ArrayList<Piece> pieces = new ArrayList<>();
+
+    for (int i = 0; i < 8; i++) {
+      for (int j = 0; j < 8; j++) {
+        Square square = getSquare(i, j);
+        Piece piece = square.getPiece();
+        if (piece != null && piece.getColor().equals(color)) {
+          pieces.add(piece);
+        }
+      }
+    }
+
+    return pieces;
   }
 
   public Square getEnPassantSquare() {

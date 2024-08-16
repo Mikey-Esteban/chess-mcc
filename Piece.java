@@ -1,3 +1,5 @@
+import java.util.List;
+
 public abstract class Piece {
   private String color;
   private PieceType pieceType;
@@ -13,6 +15,8 @@ public abstract class Piece {
     this.hasMoved = false;
     this.symbol = initializeSymbol(color);
   }
+
+  public abstract List<Square> generateLegalMoves(String color, Board board);
 
   public boolean getHasMoved() {
     return this.hasMoved;
